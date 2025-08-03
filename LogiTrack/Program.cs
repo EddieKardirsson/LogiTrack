@@ -47,15 +47,18 @@ public class Program
 
         app.MapGet("/orders", async (LogiTrackContext context) =>
         {
-            var orders = await context.Orders.Include(o => o.Items).ToListAsync();
-            return orders.Select(order => new
-            {
-                order.OrderId,
-                order.CustomerName,
-                order.OrderDate,
-                ItemCount = order.Items.Count,
-                Summary = order.GetOrderSummary()
-            });
+            var orderSummaries = await context.Orders
+                .Select(o => new
+                {
+                    o.OrderId,
+                    o.CustomerName,
+                    OrderDate = o.OrderDate.ToString("MM/dd/yyyy"),
+                    ItemCount = o.Items.Count(),
+                    Summary = $"Order #{o.OrderId} for {o.CustomerName} on {o.OrderDate.ToString("MM/dd/yyyy")} with {o.Items.Count()} items."
+                })
+                .ToListAsync();
+
+            return orderSummaries;
         });
 
         app.Run();
@@ -166,5 +169,51 @@ public class Program
         context.SaveChanges();
         
         Console.WriteLine("Database cleared successfully!");
+    }
+
+    // This method prints order summaries in batches to avoid loading too many records into memory at once. Great for large datasets.
+    // It processes orders in batches of a specified size, defaulting to 100.
+    // You can adjust the batch size as needed.
+    // This is useful for scenarios where you want to display or process large numbers of orders without overwhelming the system memory.
+    // It uses asynchronous operations to ensure that the application remains responsive while processing the data.
+    public static async Task PrintOrderSummariesInBatchesAsync(LogiTrackContext context, int batchSize = 100)
+    {
+        var totalOrders = await context.Orders.CountAsync();
+        var processedOrders = 0;
+        
+        while (processedOrders < totalOrders)
+        {
+            var batch = await context.Orders
+                .Skip(processedOrders)
+                .Take(batchSize)
+                .Select(o => new { o.OrderId, o.CustomerName, o.OrderDate, ItemCount = o.Items.Count() })
+                .ToListAsync();
+        
+            foreach (var order in batch)
+            {
+                Console.WriteLine($"Order #{order.OrderId} for {order.CustomerName} on {order.OrderDate.ToShortDateString()} with {order.ItemCount} items.");
+            }
+        
+            processedOrders += batch.Count;
+        }
+    }
+    
+    // This method prints all order summaries in a single operation.
+    // It retrieves all orders from the database and displays their summaries.
+    // This is useful for scenarios where you want to quickly view all orders without pagination or batching.
+    // It uses asynchronous operations to ensure that the application remains responsive while retrieving and displaying the data.
+    // Note: This method may not be suitable for very large datasets as it loads all orders into memory at once. Only use it when you are sure the dataset is manageable.
+    public static async Task PrintAllOrderSummariesAsync(LogiTrackContext context)
+    {
+        var orders = await context.Orders
+            .Select(o => new { o.OrderId, o.CustomerName, o.OrderDate, ItemCount = o.Items.Count() })
+            .ToListAsync();
+        
+        Console.WriteLine("=== Order Summaries ===");
+        foreach (var order in orders)
+        {
+            Console.WriteLine($"Order #{order.OrderId} for {order.CustomerName} on {order.OrderDate.ToShortDateString()} with {order.ItemCount} items.");
+        }
+        Console.WriteLine($"Total Orders: {orders.Count}");
     }
 }
