@@ -24,11 +24,17 @@ public class Order
         OrderDate = orderDate;
     }
     
-    public void AddItem(InventoryItem item) 
+    public bool AddItem(InventoryItem item) 
     {
+        // Input validation
+        if (item == null)
+            return false;
+        
         Items.Add(item);
         item.OrderId = OrderId;
         item.Order = this;
+
+        return true;
     }
     
     public void RemoveItem(int itemId) 
