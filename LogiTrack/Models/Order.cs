@@ -7,24 +7,40 @@ public class Order
 {
     [Key]
     public int OrderId { get; set; }
+    
     [Required]
     public string CustomerName { get; set; } = string.Empty;
     public DateTime OrderDate { get; set; }
-    public List<InventoryItem> Items { get; set; } = new List<InventoryItem>();
+    
+    // Navigation property for the one-to-many relationship
+    public ICollection<InventoryItem> Items { get; set; } = new List<InventoryItem>();
     
     public Order() { }
     
-    public Order(int orderId, string customerName, DateTime orderDate, List<InventoryItem> items)
+    public Order(int orderId, string customerName, DateTime orderDate)
     {
         OrderId = orderId;
         CustomerName = customerName;
         OrderDate = orderDate;
-        Items = items;
     }
     
-    public void AddItem(InventoryItem item) => Items.Add(item);
+    public void AddItem(InventoryItem item) 
+    {
+        Items.Add(item);
+        item.OrderId = OrderId;
+        item.Order = this;
+    }
     
-    public void RemoveItem(int itemId) => Items.Remove(Items.Find(item => item.ItemId == itemId));
+    public void RemoveItem(int itemId) 
+    {
+        var item = Items.FirstOrDefault(i => i.ItemId == itemId);
+        if (item != null)
+        {
+            Items.Remove(item);
+            item.OrderId = null;
+            item.Order = null;
+        }
+    }
     
     public string GetOrderSummary() => $"Order #{OrderId} for {CustomerName} on {OrderDate.ToShortDateString()} with {Items.Count} items.";
 }

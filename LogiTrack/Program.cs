@@ -18,7 +18,7 @@ public class Program
         builder.Services.AddOpenApi();
 
         var app = builder.Build();
-
+        
         // Seed the database (comment/uncomment as needed)
         SeedDatabase(app);
 
@@ -147,5 +147,24 @@ public class Program
         context.SaveChanges();
 
         Console.WriteLine("Database seeded successfully!");
+    }
+    
+    // Call this method to clear the database
+    // This is useful for testing or resetting the database state.
+    private static void ClearDatabase(WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<LogiTrackContext>();
+        
+        context.InventoryItems.RemoveRange(context.InventoryItems);
+        context.Orders.RemoveRange(context.Orders);
+        
+        // Reset the index counters to start from 1 again
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='InventoryItems'");
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='Orders'");
+        
+        context.SaveChanges();
+        
+        Console.WriteLine("Database cleared successfully!");
     }
 }
