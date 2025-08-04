@@ -13,6 +13,7 @@ public class InventoryController : ControllerBase
     
     public InventoryController(LogiTrackContext context) => this.context = context;
     
+    // GET: api/inventory
     [HttpGet]
     public async Task<ActionResult<IEnumerable<InventoryItem>>> GetAllItems()
     {
@@ -20,6 +21,16 @@ public class InventoryController : ControllerBase
         return Ok(items);
     }
     
+    // GET: api/inventory/{id}
+    [HttpGet("{id}")]
+    public async Task<ActionResult<InventoryItem>> GetItemById(int id)
+    {
+        var item = await context.InventoryItems.FindAsync(id);
+        if(item == null) return NotFound();
+        return Ok(item);
+    }
+    
+    // POST: api/inventory
     [HttpPost]
     public async Task<ActionResult<InventoryItem>> CreateItem(InventoryItem item)
     {
@@ -35,6 +46,7 @@ public class InventoryController : ControllerBase
     }
 
     // Method to update an existing inventory item with more quantity of the particular item
+    // PUT: api/inventory/{id}
     [HttpPut("{id}")]
     public async Task<ActionResult<InventoryItem>> AddItemQuantity(int id, [FromBody] int addedQuantity)
     {
@@ -53,14 +65,7 @@ public class InventoryController : ControllerBase
         return Ok(item);
     }
 
-    [HttpGet("{id}")]
-    public async Task<ActionResult<InventoryItem>> GetItemById(int id)
-    {
-        var item = await context.InventoryItems.FindAsync(id);
-        if(item == null) return NotFound();
-        return Ok(item);
-    }
-
+    // DELETE: api/inventory/{id}
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteItem(int id)
     {
