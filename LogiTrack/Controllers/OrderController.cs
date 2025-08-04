@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace LogiTrack.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/[controller]s")]
 public class OrderController : ControllerBase
 {
     private readonly LogiTrackContext context;

@@ -1,6 +1,45 @@
 @LogiTrack_HostAddress = http://localhost:5151
+@LogiTrack_SecureHostAddress = https://localhost:7129
 
 GET {{LogiTrack_HostAddress}}/weatherforecast/
 Accept: application/json
+
+###
+
+GET {{LogiTrack_SecureHostAddress }}/api/inventory
+Accept: application/json
+
+###
+
+GET {{LogiTrack_SecureHostAddress }}/api/inventory/4
+Accept: application/json
+
+###
+
+GET {{LogiTrack_SecureHostAddress }}/api/orders
+Accept: application/json
+
+###
+GET {{LogiTrack_SecureHostAddress }}/api/orders/1
+Accept: application/json
+
+###
+POST {{LogiTrack_SecureHostAddress }}/api/Inventory/
+Content-Type: application/json
+
+{
+  "itemId": "11",
+  "name": "New Item",
+  "quantity": "13",
+  "location": "Warehouse A"
+}
+
+###
+DELETE {{LogiTrack_SecureHostAddress }}/api/Inventory/11
+Content-Type: application/json
+
+{
+  "itemId": "11"
+}
 
 ###

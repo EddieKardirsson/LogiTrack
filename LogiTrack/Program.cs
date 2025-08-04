@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using LogiTrack.Models;
 using LogiTrack.Data;
 using Microsoft.EntityFrameworkCore;
@@ -13,9 +14,25 @@ public class Program
         // Add services to the container.
         builder.Services.AddDbContext<LogiTrackContext>();
         builder.Services.AddAuthorization();
+        builder.Services.AddControllers()
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.Preserve;
+            });
 
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
+        
+        builder.Services
+            .AddEndpointsApiExplorer()
+            .AddSwaggerGen();
+        
+        // Add Exception Handling Middleware
+        builder.Services.AddExceptionHandler(options =>
+        {
+            options.ExceptionHandlingPath = "/error";
+            options.AllowStatusCode404Response = true;
+        });
 
         var app = builder.Build();
         
@@ -27,9 +44,13 @@ public class Program
         {
             app.MapOpenApi();
         }
+        
+        app.UseSwagger();
+        app.UseSwaggerUI();
 
         app.UseHttpsRedirection();
         app.UseAuthorization();
+        app.UseExceptionHandler("/error");
         
         app.MapGet("/", () => "Hello World!");
         
@@ -61,6 +82,7 @@ public class Program
             return orderSummaries;
         });
 
+        app.MapControllers();
         app.Run();
     }
 
