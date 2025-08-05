@@ -11,4 +11,14 @@ public class LogiTrackContext : DbContext
     
     protected override void OnConfiguring(DbContextOptionsBuilder options)
         => options.UseSqlite("Data Source=Data/logitrack.db");
+    
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // Configure OrderItem -> InventoryItem relationship
+        modelBuilder.Entity<OrderItem>()
+            .HasOne(oi => oi.InventoryItem)
+            .WithMany()
+            .HasForeignKey(oi => oi.InventoryItemId)
+            .OnDelete(DeleteBehavior.Restrict); // Prevent deleting inventory items that are in orders
+    }
 }

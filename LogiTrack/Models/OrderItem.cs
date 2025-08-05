@@ -8,10 +8,9 @@ public class OrderItem
     public int OrderItemId { get; set; }
     
     public int InventoryItemId { get; set; }
-    public InventoryItem InventoryItem { get; set; } = null!;
+    public InventoryItem? InventoryItem { get; set; } // Make this nullable
     
     public int QuantityOrdered { get; set; }
-    
     
     public OrderItem() { }
     

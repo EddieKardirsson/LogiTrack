@@ -43,3 +43,60 @@ Content-Type: application/json
 }
 
 ###
+POST {{LogiTrack_SecureHostAddress }}/api/orders
+Content-Type: application/json
+
+{
+  "customerName": "Darth Vader",
+  "orderDate": "2025-08-05T10:00:00",
+  "items": [
+    {
+      "inventoryItemId": 1,
+      "quantityOrdered": 2
+    },
+    {
+      "inventoryItemId": 3,
+      "quantityOrdered": 1
+    }
+  ]
+}
+
+###
+POST {{LogiTrack_SecureHostAddress }}/api/orders
+Content-Type: application/json
+
+{
+  "customerName": "Darth Vader",
+  "orderDate": "2025-08-05T15:00:46.741Z",
+  "items": [
+    {
+      "inventoryItemId": 1,
+      "quantityOrdered": 2
+    },
+    {
+      "inventoryItemId": 3,
+      "quantityOrdered": 1
+    }
+  ]
+}
+
+###
+PUT {{LogiTrack_SecureHostAddress }}/api/orders/1
+Content-Type: application/json
+
+{
+  "customerName": "Emperor Palpatine Updated",
+  "orderDate": "2025-08-05T15:15:58.806Z",
+  "items": [
+    {
+      "inventoryItemId": 1,
+      "quantityOrdered": 5
+    },
+    {
+      "inventoryItemId": 2,
+      "quantityOrdered": 3
+    }
+  ]
+}
+
+

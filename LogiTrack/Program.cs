@@ -180,14 +180,22 @@ public class Program
         using var scope = app.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<LogiTrackContext>();
         
-        context.InventoryItems.RemoveRange(context.InventoryItems);
+        // Delete in the correct order to respect foreign key constraints
+        // 1. First delete OrderItems (they reference InventoryItems)
+        context.OrderItems.RemoveRange(context.OrderItems);
+        
+        // 2. Then delete Orders (they contain OrderItems)
         context.Orders.RemoveRange(context.Orders);
+        
+        // 3. Finally delete InventoryItems (they are referenced by OrderItems)
+        context.InventoryItems.RemoveRange(context.InventoryItems);
+        
+        context.SaveChanges();
         
         // Reset the index counters to start from 1 again
         context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='InventoryItems'");
         context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='Orders'");
-        
-        context.SaveChanges();
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='OrderItems'");
         
         Console.WriteLine("Database cleared successfully!");
     }
