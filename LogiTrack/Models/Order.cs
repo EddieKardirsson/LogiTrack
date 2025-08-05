@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LogiTrack.Models;
 
@@ -12,8 +11,8 @@ public class Order
     public string CustomerName { get; set; } = string.Empty;
     public DateTime OrderDate { get; set; }
     
-    // Navigation property for the one-to-many relationship
-    public ICollection<InventoryItem> Items { get; set; } = new List<InventoryItem>();
+    // Collection of order items (each with quantity)
+    public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
     
     public Order() { }
     
@@ -24,29 +23,32 @@ public class Order
         OrderDate = orderDate;
     }
     
-    public bool AddItem(InventoryItem item) 
+    public bool AddItem(int inventoryItemId, int quantity) 
     {
-        // Input validation
-        if (item == null)
-            return false;
+        if (quantity <= 0) return false;
         
-        Items.Add(item);
-        item.OrderId = OrderId;
-        item.Order = this;
-
+        // Check if item already exists in order
+        var existingOrderItem = Items.FirstOrDefault(oi => oi.InventoryItemId == inventoryItemId);
+        if (existingOrderItem != null)
+        {
+            existingOrderItem.QuantityOrdered += quantity;
+        }
+        else
+        {
+            Items.Add(new OrderItem(inventoryItemId, quantity));
+        }
+        
         return true;
     }
     
-    public void RemoveItem(int itemId) 
+    public void RemoveItem(int inventoryItemId) 
     {
-        var item = Items.FirstOrDefault(i => i.ItemId == itemId);
-        if (item != null)
+        var orderItem = Items.FirstOrDefault(oi => oi.InventoryItemId == inventoryItemId);
+        if (orderItem != null)
         {
-            Items.Remove(item);
-            item.OrderId = null;
-            item.Order = null;
+            Items.Remove(orderItem);
         }
     }
     
-    public string GetOrderSummary() => $"Order #{OrderId} for {CustomerName} on {OrderDate.ToShortDateString()} with {Items.Count} items.";
+    public string GetOrderSummary() => $"Order #{OrderId} for {CustomerName} on {OrderDate.ToShortDateString()} with {Items.Sum(i => i.QuantityOrdered)} total items.";
 }

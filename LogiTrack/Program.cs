@@ -36,6 +36,7 @@ public class Program
 
         var app = builder.Build();
         
+        
         // Seed the database (comment/uncomment as needed)
         SeedDatabase(app);
 
@@ -126,44 +127,42 @@ public class Program
             { 
                 CustomerName = "Palpatine", 
                 OrderDate = DateTime.Now.AddDays(-5),
-                Items = new List<InventoryItem> 
+                Items = new List<OrderItem> 
                 { 
-                    inventoryItems[0], // Crowbar
-                    inventoryItems[1],  // Pallet Jack
-                    inventoryItems[1],  // Pallet Jack
-                    inventoryItems[9]  // Warehouse Management Software
+                    new OrderItem(1, 1),  // 1 Crowbar
+                    new OrderItem(2, 2),  // 2 Pallet Jacks
+                    new OrderItem(10, 1)  // 1 Warehouse Management Software
                 }
             },
             new Order 
             { 
                 CustomerName = "Luke Skywalker", 
                 OrderDate = DateTime.Now.AddDays(-2),
-                Items = new List<InventoryItem> 
+                Items = new List<OrderItem> 
                 { 
-                    inventoryItems[3], // Safety Helmet
-                    inventoryItems[2],  // Forklift
-                    inventoryItems[6]  // Conveyor Belt
+                    new OrderItem(4, 3),  // 3 Safety Helmets
+                    new OrderItem(3, 1),  // 1 Forklift
+                    new OrderItem(7, 1)   // 1 Conveyor Belt
                 }
             },
             new Order 
             { 
                 CustomerName = "Leia Organa", 
                 OrderDate = DateTime.Now.AddDays(-1),
-                Items = new List<InventoryItem> 
+                Items = new List<OrderItem> 
                 { 
-                    inventoryItems[4], // Loading Dock
-                    inventoryItems[4]  // Loading Dock
+                    new OrderItem(5, 2),  // 2 Loading Docks
                 }
             },
             new Order 
             { 
                 CustomerName = "Han Solo", 
                 OrderDate = DateTime.Now,
-                Items = new List<InventoryItem> 
+                Items = new List<OrderItem> 
                 { 
-                    inventoryItems[5], // Hand Truck
-                    inventoryItems[7],  // Pallet Racks
-                    inventoryItems[8]  // Dock Leveler
+                    new OrderItem(6, 1),  // 1 Hand Truck
+                    new OrderItem(8, 3),  // 3 Pallet Racks
+                    new OrderItem(9, 1)   // 1 Dock Leveler
                 }
             }
         };

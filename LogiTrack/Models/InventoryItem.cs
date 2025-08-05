@@ -15,12 +15,6 @@ public class InventoryItem
     [Required]
     public string Location { get; set; } = string.Empty;
 
-    // Foreign key for the one-to-many relationship
-    public int? OrderId { get; set; }
-    
-    // Navigation property
-    public Order? Order { get; set; }
-
     public InventoryItem() { }
     
     public InventoryItem(int itemId, string name, int quantity, string location)

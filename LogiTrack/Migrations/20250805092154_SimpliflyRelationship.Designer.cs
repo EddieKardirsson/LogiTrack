@@ -3,6 +3,7 @@ using System;
 using LogiTrack.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LogiTrack.Migrations
 {
     [DbContext(typeof(LogiTrackContext))]
-    partial class LogiTrackContextModelSnapshot : ModelSnapshot
+    [Migration("20250805092154_SimpliflyRelationship")]
+    partial class SimpliflyRelationship
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
@@ -31,10 +34,15 @@ namespace LogiTrack.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("OrderId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("ItemId");
+
+                    b.HasIndex("OrderId");
 
                     b.ToTable("InventoryItems");
                 });
@@ -57,43 +65,11 @@ namespace LogiTrack.Migrations
                     b.ToTable("Orders");
                 });
 
-            modelBuilder.Entity("LogiTrack.Models.OrderItem", b =>
+            modelBuilder.Entity("LogiTrack.Models.InventoryItem", b =>
                 {
-                    b.Property<int>("OrderItemId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("InventoryItemId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("OrderId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QuantityOrdered")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("OrderItemId");
-
-                    b.HasIndex("InventoryItemId");
-
-                    b.HasIndex("OrderId");
-
-                    b.ToTable("OrderItems");
-                });
-
-            modelBuilder.Entity("LogiTrack.Models.OrderItem", b =>
-                {
-                    b.HasOne("LogiTrack.Models.InventoryItem", "InventoryItem")
-                        .WithMany()
-                        .HasForeignKey("InventoryItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("LogiTrack.Models.Order", null)
                         .WithMany("Items")
                         .HasForeignKey("OrderId");
-
-                    b.Navigation("InventoryItem");
                 });
 
             modelBuilder.Entity("LogiTrack.Models.Order", b =>
