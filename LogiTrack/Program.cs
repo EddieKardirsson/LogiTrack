@@ -1,7 +1,11 @@
+using System.Text;
 using System.Text.Json.Serialization;
 using LogiTrack.Models;
 using LogiTrack.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 namespace LogiTrack;
 
@@ -13,6 +17,47 @@ public class Program
 
         // Add services to the container.
         builder.Services.AddDbContext<LogiTrackContext>();
+        
+        // Add Identity services
+        builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+        {
+            // Configure password requirements
+            options.Password.RequiredLength = 6;
+            options.Password.RequireNonAlphanumeric = false;
+            options.Password.RequireDigit = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireLowercase = false;
+            
+            // Configure user requirements
+            options.User.RequireUniqueEmail = true;
+        })
+        .AddEntityFrameworkStores<LogiTrackContext>()
+        .AddDefaultTokenProviders();
+
+        // Add JWT Authentication
+        var jwtKey = builder.Configuration["Jwt:Key"] ?? "YourVerySecretKeyThatIsAtLeast32CharactersLong";
+        var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "LogiTrack";
+        var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "LogiTrack";
+
+        builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = jwtIssuer,
+                ValidAudience = jwtAudience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            };
+        });
+
         builder.Services.AddAuthorization();
         builder.Services.AddControllers()
             .AddJsonOptions(options =>
@@ -25,7 +70,33 @@ public class Program
         
         builder.Services
             .AddEndpointsApiExplorer()
-            .AddSwaggerGen();
+            .AddSwaggerGen(c =>
+            {
+                // Add JWT support to Swagger
+                c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    Description = "JWT Authorization header using the Bearer scheme",
+                    Name = "Authorization",
+                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+                    Scheme = "Bearer"
+                });
+                
+                c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+                {
+                    {
+                        new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                        {
+                            Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                            {
+                                Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            }
+                        },
+                        new string[] {}
+                    }
+                });
+            });
         
         // Add Exception Handling Middleware
         builder.Services.AddExceptionHandler(options =>
@@ -50,7 +121,11 @@ public class Program
         app.UseSwaggerUI();
 
         app.UseHttpsRedirection();
+        
+        // Add authentication and authorization middleware
+        app.UseAuthentication();
         app.UseAuthorization();
+        
         app.UseExceptionHandler("/error");
         
         app.MapGet("/", () => "Hello World!");
@@ -95,6 +170,17 @@ public class Program
     {
         using var scope = app.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<LogiTrackContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        
+        // Ensure database is created
+        context.Database.EnsureCreated();
+        
+        // Seed roles
+        SeedRolesAsync(roleManager).Wait();
+        
+        // Seed users
+        SeedUsersAsync(userManager).Wait();
         
         // Check if data already exists
         if (context.InventoryItems.Any() || context.Orders.Any())
@@ -175,6 +261,61 @@ public class Program
     
     // Call this method to clear the database
     // This is useful for testing or resetting the database state.
+    private static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)
+    {
+        string[] roles = { "Manager", "Employee", "Customer" };
+        
+        foreach (var role in roles)
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                await roleManager.CreateAsync(new IdentityRole(role));
+            }
+        }
+    }
+    
+    private static async Task SeedUsersAsync(UserManager<ApplicationUser> userManager)
+    {
+        // Create admin user
+        if (await userManager.FindByEmailAsync("admin@logitrack.com") == null)
+        {
+            var adminUser = new ApplicationUser
+            {
+                UserName = "admin@logitrack.com",
+                Email = "admin@logitrack.com",
+                FirstName = "Admin",
+                LastName = "User",
+                EmailConfirmed = true
+            };
+            
+            var result = await userManager.CreateAsync(adminUser, "Admin123!");
+            if (result.Succeeded)
+            {
+                await userManager.AddToRoleAsync(adminUser, "Manager");
+            }
+        }
+        
+        // Create regular user
+        if (await userManager.FindByEmailAsync("user@logitrack.com") == null)
+        {
+            var regularUser = new ApplicationUser
+            {
+                UserName = "user@logitrack.com",
+                Email = "user@logitrack.com",
+                FirstName = "Employee",
+                LastName = "User",
+                EmailConfirmed = true
+            };
+            
+            var result = await userManager.CreateAsync(regularUser, "User123!");
+            if (result.Succeeded)
+            {
+                await userManager.AddToRoleAsync(regularUser, "Employee");
+            }
+        }
+    }
+
+    // Your existing methods...
     private static void ClearDatabase(WebApplication app)
     {
         using var scope = app.Services.CreateScope();
