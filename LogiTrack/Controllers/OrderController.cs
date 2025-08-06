@@ -2,47 +2,50 @@ using LogiTrack.Data;
 using LogiTrack.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace LogiTrack.Controllers;
 
 [ApiController]
 [Route("api/[controller]s")]
+[Authorize] // Require authentication for all endpoints
 public class OrderController : ControllerBase
 {
     private readonly LogiTrackContext context;
     
     public OrderController(LogiTrackContext context) => this.context = context;
     
-    // GET: api/orders
+    // GET: api/orders - Anyone authenticated can view
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Order>>> GetAllOrders()
     {
         var orders = await context.Orders
             .Include(o => o.Items)
             .ThenInclude(oi => oi.InventoryItem)
-        .AsNoTracking()
-        .ToListAsync();
+            .AsNoTracking()
+            .ToListAsync();
     
-    return Ok(orders);
-}
+        return Ok(orders);
+    }
 
-// GET: api/orders/{id}
-[HttpGet("{id}")]
-public async Task<ActionResult<Order>> GetOrderById(int id)
-{
-    var order = await context.Orders
-        .Include(o => o.Items)
-            .ThenInclude(oi => oi.InventoryItem)
-        .AsNoTracking()
-        .FirstOrDefaultAsync(o => o.OrderId == id);
+    // GET: api/orders/{id} - Anyone authenticated can view
+    [HttpGet("{id}")]
+    public async Task<ActionResult<Order>> GetOrderById(int id)
+    {
+        var order = await context.Orders
+            .Include(o => o.Items)
+                .ThenInclude(oi => oi.InventoryItem)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.OrderId == id);
+        
+        if (order == null) return NotFound();
+        
+        return Ok(order);
+    }
     
-    if (order == null) return NotFound();
-    
-    return Ok(order);
-}
-    
-    // POST: api/orders
+    // POST: api/orders - Managers and Employees can create
     [HttpPost]
+    [Authorize(Roles = "Manager,Employee")]
     public async Task<ActionResult<Order>> CreateOrder(Order newOrder)
     {
         if(newOrder == null || string.IsNullOrWhiteSpace(newOrder.CustomerName)) 
@@ -82,9 +85,9 @@ public async Task<ActionResult<Order>> GetOrderById(int id)
         return CreatedAtAction(nameof(GetOrderById), new { id = newOrder.OrderId }, createdOrder);
     }
 
-    
-    // PUT: api/orders/{id}
+    // PUT: api/orders/{id} - Only Managers can update
     [HttpPut("{id}")]
+    [Authorize(Roles = "Manager")]
     public async Task<ActionResult<Order>> UpdateOrder(int id, Order updatedOrder)
     {
         if (updatedOrder == null || string.IsNullOrWhiteSpace(updatedOrder.CustomerName))
@@ -141,17 +144,27 @@ public async Task<ActionResult<Order>> GetOrderById(int id)
         return Ok(result);
     }
 
-    
-    // DELETE: api/orders/{id} - Simpler version with cascade delete
+    // DELETE: api/orders/{id} - Only Managers can delete
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Manager")]
     public async Task<ActionResult> DeleteOrder(int id)
     {
-        var order = await context.Orders.FindAsync(id);
+        var order = await context.Orders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.OrderId == id);
+        
         if (order == null) return NotFound();
-    
+        
+        // Remove all order items first
+        if (order.Items.Any())
+        {
+            context.OrderItems.RemoveRange(order.Items);
+        }
+        
+        // Then remove the order
         context.Orders.Remove(order);
         await context.SaveChangesAsync();
-    
+        
         return NoContent();
     }
 }

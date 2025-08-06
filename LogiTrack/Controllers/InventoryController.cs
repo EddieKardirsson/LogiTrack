@@ -2,18 +2,20 @@ using Microsoft.AspNetCore.Mvc;
 using LogiTrack.Data;
 using LogiTrack.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace LogiTrack.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize] // Require authentication for all endpoints
 public class InventoryController : ControllerBase
 {
     private readonly LogiTrackContext context;
     
     public InventoryController(LogiTrackContext context) => this.context = context;
     
-    // GET: api/inventory
+    // GET: api/inventory - Anyone authenticated can view
     [HttpGet]
     public async Task<ActionResult<IEnumerable<InventoryItem>>> GetAllItems()
     {
@@ -21,7 +23,7 @@ public class InventoryController : ControllerBase
         return Ok(items);
     }
     
-    // GET: api/inventory/{id}
+    // GET: api/inventory/{id} - Anyone authenticated can view
     [HttpGet("{id}")]
     public async Task<ActionResult<InventoryItem>> GetItemById(int id)
     {
@@ -30,8 +32,9 @@ public class InventoryController : ControllerBase
         return Ok(item);
     }
     
-    // POST: api/inventory
+    // POST: api/inventory - Only Managers can create
     [HttpPost]
+    [Authorize(Roles = "Manager")]
     public async Task<ActionResult<InventoryItem>> CreateItem(InventoryItem item)
     {
         if (item == null || string.IsNullOrWhiteSpace(item.Name) || item.Quantity < 0 || string.IsNullOrWhiteSpace(item.Location))
@@ -45,9 +48,9 @@ public class InventoryController : ControllerBase
         return CreatedAtAction(nameof(GetItemById), new { id = item.ItemId }, item);
     }
 
-    // Method to update an existing inventory item with more quantity of the particular item
-    // PUT: api/inventory/{id}
+    // PUT: api/inventory/{id} - Only Managers can update
     [HttpPut("{id}")]
+    [Authorize(Roles = "Manager")]
     public async Task<ActionResult<InventoryItem>> AddItemQuantity(int id, [FromBody] int addedQuantity)
     {
         var item = await context.InventoryItems.FindAsync(id);
@@ -65,8 +68,9 @@ public class InventoryController : ControllerBase
         return Ok(item);
     }
 
-    // DELETE: api/inventory/{id}
+    // DELETE: api/inventory/{id} - Only Managers can delete
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Manager")]
     public async Task<ActionResult> DeleteItem(int id)
     {
         var item = await context.InventoryItems.FindAsync(id);
