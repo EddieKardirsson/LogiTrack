@@ -142,26 +142,16 @@ public async Task<ActionResult<Order>> GetOrderById(int id)
     }
 
     
-    // DELETE: api/orders/{id}
+    // DELETE: api/orders/{id} - Simpler version with cascade delete
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteOrder(int id)
     {
-        var order = await context.Orders
-            .Include(o => o.Items)  // Include OrderItems to handle deletion
-            .FirstOrDefaultAsync(o => o.OrderId == id);
-        
+        var order = await context.Orders.FindAsync(id);
         if (order == null) return NotFound();
-        
-        // Remove all order items first (if cascade delete isn't configured)
-        if (order.Items.Any())
-        {
-            context.OrderItems.RemoveRange(order.Items);
-        }
-        
-        // Then remove the order
+    
         context.Orders.Remove(order);
         await context.SaveChangesAsync();
-        
+    
         return NoContent();
     }
 }

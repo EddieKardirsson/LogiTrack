@@ -20,5 +20,11 @@ public class LogiTrackContext : DbContext
             .WithMany()
             .HasForeignKey(oi => oi.InventoryItemId)
             .OnDelete(DeleteBehavior.Restrict); // Prevent deleting inventory items that are in orders
+        
+        // Configure Order -> OrderItems relationship with cascade delete
+        modelBuilder.Entity<Order>()
+            .HasMany(o => o.Items)
+            .WithOne()
+            .OnDelete(DeleteBehavior.Cascade);  // When an order is deleted, its order items are also deleted
     }
 }

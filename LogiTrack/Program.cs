@@ -36,9 +36,9 @@ public class Program
 
         var app = builder.Build();
         
-        
-        // Seed the database (comment/uncomment as needed)
+        // Seed or Clear the database (comment/uncomment as needed)
         SeedDatabase(app);
+        //ClearDatabase(app);
 
         // Configure the HTTP request pipeline.
         if (app.Environment.IsDevelopment())
