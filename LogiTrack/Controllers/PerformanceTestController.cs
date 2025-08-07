@@ -16,12 +16,18 @@ public class PerformanceTestController : ControllerBase
     private readonly LogiTrackContext _context;
     private readonly IMemoryCache _cache;
     private readonly ILogger<PerformanceTestController> _logger;
+    private readonly IServiceProvider _serviceProvider;
 
-    public PerformanceTestController(LogiTrackContext context, IMemoryCache cache, ILogger<PerformanceTestController> logger)
+    public PerformanceTestController(
+        LogiTrackContext context, 
+        IMemoryCache cache, 
+        ILogger<PerformanceTestController> logger,
+        IServiceProvider serviceProvider)
     {
         _context = context;
         _cache = cache;
         _logger = logger;
+        _serviceProvider = serviceProvider;
     }
 
     [HttpGet("comprehensive-test")]
@@ -30,30 +36,38 @@ public class PerformanceTestController : ControllerBase
         var results = new List<object>();
         var overallStopwatch = Stopwatch.StartNew();
 
-        // Test 1: Cold database inventory query
-        results.Add(await TestColdInventoryQuery());
-        
-        // Test 2: Cached inventory query
-        results.Add(await TestCachedInventoryQuery());
-        
-        // Test 3: Complex order query with joins
-        results.Add(await TestComplexOrderQuery());
-        
-        // Test 4: Database write performance
-        results.Add(await TestDatabaseWritePerformance());
-        
-        // Test 5: Cache vs Database comparison
-        results.Add(await TestCacheVsDatabaseComparison());
-
-        overallStopwatch.Stop();
-
-        return Ok(new
+        try
         {
-            TestResults = results,
-            TotalTestTimeMs = overallStopwatch.ElapsedMilliseconds,
-            TestCompletedAt = DateTime.UtcNow,
-            Recommendations = GeneratePerformanceRecommendations(results)
-        });
+            // Test 1: Cold database inventory query
+            results.Add(await TestColdInventoryQuery());
+            
+            // Test 2: Cached inventory query
+            results.Add(await TestCachedInventoryQuery());
+            
+            // Test 3: Complex order query with joins
+            results.Add(await TestComplexOrderQuery());
+            
+            // Test 4: Database write performance
+            results.Add(await TestDatabaseWritePerformance());
+            
+            // Test 5: Cache vs Database comparison
+            results.Add(await TestCacheVsDatabaseComparison());
+
+            overallStopwatch.Stop();
+
+            return Ok(new
+            {
+                TestResults = results,
+                TotalTestTimeMs = overallStopwatch.ElapsedMilliseconds,
+                TestCompletedAt = DateTime.UtcNow,
+                Recommendations = GeneratePerformanceRecommendations(results)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Performance test failed");
+            return StatusCode(500, new { Error = "Performance test failed", Details = ex.Message });
+        }
     }
 
     [HttpGet("stress-test")]
@@ -61,205 +75,373 @@ public class PerformanceTestController : ControllerBase
     public async Task<ActionResult> StressTest()
     {
         var results = new List<object>();
-        const int iterations = 50;
+        const int iterations = 20; // Reduced for safer testing
         
-        var stopwatch = Stopwatch.StartNew();
-        var tasks = new List<Task<long>>();
-
-        // Create multiple concurrent requests
-        for (int i = 0; i < iterations; i++)
+        try
         {
-            tasks.Add(Task.Run(async () =>
+            var stopwatch = Stopwatch.StartNew();
+            var tasks = new List<Task<(long TimeMs, bool Success)>>();
+
+            // Create multiple concurrent requests with separate DbContext instances
+            for (int i = 0; i < iterations; i++)
             {
-                var sw = Stopwatch.StartNew();
-                await _context.InventoryItems.AsNoTracking().ToListAsync();
-                sw.Stop();
-                return sw.ElapsedMilliseconds;
-            }));
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Create a new scope for each task to get a fresh DbContext
+                        using var scope = _serviceProvider.CreateScope();
+                        var scopedContext = scope.ServiceProvider.GetRequiredService<LogiTrackContext>();
+                        
+                        var sw = Stopwatch.StartNew();
+                        var items = await scopedContext.InventoryItems
+                            .AsNoTracking()
+                            .Take(10) // Limit results for performance
+                            .ToListAsync();
+                        sw.Stop();
+                        
+                        return (sw.ElapsedMilliseconds, items.Any());
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Stress test iteration failed");
+                        return (-1L, false);
+                    }
+                }));
+            }
+
+            var results_array = await Task.WhenAll(tasks);
+            stopwatch.Stop();
+
+            var successfulResults = results_array.Where(r => r.Success && r.TimeMs > 0).ToArray();
+            var times = successfulResults.Select(r => r.TimeMs).ToArray();
+
+            if (!times.Any())
+            {
+                return Ok(new
+                {
+                    StressTestResults = new
+                    {
+                        Status = "Failed",
+                        Message = "No successful iterations completed",
+                        TotalRequests = iterations,
+                        SuccessfulRequests = 0
+                    },
+                    Timestamp = DateTime.UtcNow
+                });
+            }
+
+            return Ok(new
+            {
+                StressTestResults = new
+                {
+                    Status = "Completed",
+                    TotalRequests = iterations,
+                    SuccessfulRequests = successfulResults.Length,
+                    FailedRequests = iterations - successfulResults.Length,
+                    TotalTimeMs = stopwatch.ElapsedMilliseconds,
+                    AverageTimeMs = Math.Round(times.Average(), 2),
+                    MinTimeMs = times.Min(),
+                    MaxTimeMs = times.Max(),
+                    RequestsPerSecond = Math.Round(successfulResults.Length / (stopwatch.ElapsedMilliseconds / 1000.0), 2),
+                    SuccessRate = Math.Round((double)successfulResults.Length / iterations * 100, 2)
+                },
+                Timestamp = DateTime.UtcNow
+            });
         }
-
-        var times = await Task.WhenAll(tasks);
-        stopwatch.Stop();
-
-        return Ok(new
+        catch (Exception ex)
         {
-            StressTestResults = new
+            _logger.LogError(ex, "Stress test failed completely");
+            return StatusCode(500, new 
+            { 
+                Error = "Stress test failed", 
+                Details = ex.Message,
+                Timestamp = DateTime.UtcNow 
+            });
+        }
+    }
+
+    [HttpGet("simple-stress-test")]
+    [Authorize(Roles = "Manager")]
+    public async Task<ActionResult> SimpleStressTest()
+    {
+        const int iterations = 10;
+        var times = new List<long>();
+        
+        try
+        {
+            var overallStopwatch = Stopwatch.StartNew();
+            
+            // Sequential execution to avoid DbContext threading issues
+            for (int i = 0; i < iterations; i++)
             {
-                TotalRequests = iterations,
-                TotalTimeMs = stopwatch.ElapsedMilliseconds,
-                AverageTimeMs = times.Average(),
-                MinTimeMs = times.Min(),
-                MaxTimeMs = times.Max(),
-                RequestsPerSecond = iterations / (stopwatch.ElapsedMilliseconds / 1000.0),
-                ConcurrentExecutionSuccessful = times.All(t => t > 0)
-            },
-            Timestamp = DateTime.UtcNow
-        });
+                using var scope = _serviceProvider.CreateScope();
+                var scopedContext = scope.ServiceProvider.GetRequiredService<LogiTrackContext>();
+                
+                var sw = Stopwatch.StartNew();
+                var count = await scopedContext.InventoryItems.AsNoTracking().CountAsync();
+                sw.Stop();
+                
+                times.Add(sw.ElapsedMilliseconds);
+            }
+            
+            overallStopwatch.Stop();
+
+            return Ok(new
+            {
+                SimpleStressTestResults = new
+                {
+                    Status = "Completed",
+                    TotalRequests = iterations,
+                    TotalTimeMs = overallStopwatch.ElapsedMilliseconds,
+                    AverageTimeMs = Math.Round(times.Average(), 2),
+                    MinTimeMs = times.Min(),
+                    MaxTimeMs = times.Max(),
+                    RequestsPerSecond = Math.Round(iterations / (overallStopwatch.ElapsedMilliseconds / 1000.0), 2)
+                },
+                IndividualTimes = times,
+                Timestamp = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Simple stress test failed");
+            return StatusCode(500, new { Error = "Simple stress test failed", Details = ex.Message });
+        }
     }
 
     [HttpGet("clear-all-cache")]
     [Authorize(Roles = "Manager")]
     public ActionResult ClearAllCache()
     {
-        // Clear known cache keys
-        var cacheKeys = new[]
+        try
         {
-            "inventory_list",
-            "orders_list"
-        };
-
-        var clearedCount = 0;
-        foreach (var key in cacheKeys)
-        {
-            if (_cache.TryGetValue(key, out _))
+            // Clear known cache keys
+            var cacheKeys = new[]
             {
-                _cache.Remove(key);
-                clearedCount++;
+                "inventory_list",
+                "orders_list"
+            };
+
+            var clearedCount = 0;
+            foreach (var key in cacheKeys)
+            {
+                if (_cache.TryGetValue(key, out _))
+                {
+                    _cache.Remove(key);
+                    clearedCount++;
+                }
             }
+
+            // Also clear individual item caches (simplified approach)
+            for (int i = 1; i <= 20; i++) // Assuming max 20 items for demo
+            {
+                var itemKey = $"inventory_item_{i}";
+                var orderKey = $"order_detail_{i}";
+                
+                if (_cache.TryGetValue(itemKey, out _))
+                {
+                    _cache.Remove(itemKey);
+                    clearedCount++;
+                }
+                
+                if (_cache.TryGetValue(orderKey, out _))
+                {
+                    _cache.Remove(orderKey);
+                    clearedCount++;
+                }
+            }
+
+            return Ok(new 
+            { 
+                Message = "All caches cleared successfully", 
+                ClearedCacheEntries = clearedCount,
+                Timestamp = DateTime.UtcNow 
+            });
         }
-
-        // Also clear individual item caches (simplified approach)
-        for (int i = 1; i <= 20; i++) // Assuming max 20 items for demo
+        catch (Exception ex)
         {
-            var itemKey = $"inventory_item_{i}";
-            var orderKey = $"order_detail_{i}";
-            
-            if (_cache.TryGetValue(itemKey, out _))
-            {
-                _cache.Remove(itemKey);
-                clearedCount++;
-            }
-            
-            if (_cache.TryGetValue(orderKey, out _))
-            {
-                _cache.Remove(orderKey);
-                clearedCount++;
-            }
+            _logger.LogError(ex, "Cache clearing failed");
+            return StatusCode(500, new { Error = "Cache clearing failed", Details = ex.Message });
         }
-
-        return Ok(new 
-        { 
-            Message = "All caches cleared successfully", 
-            ClearedCacheEntries = clearedCount,
-            Timestamp = DateTime.UtcNow 
-        });
     }
 
+    // Rest of the private methods remain the same but with better error handling
     private async Task<object> TestColdInventoryQuery()
     {
-        _cache.Remove("inventory_list");
-        var stopwatch = Stopwatch.StartNew();
-        var items = await _context.InventoryItems.AsNoTracking().ToListAsync();
-        stopwatch.Stop();
-        
-        return new
+        try
         {
-            Test = "Cold Database Inventory Query",
-            TimeMs = stopwatch.ElapsedMilliseconds,
-            ItemCount = items.Count,
-            Status = stopwatch.ElapsedMilliseconds < 50 ? "Excellent" : 
-                     stopwatch.ElapsedMilliseconds < 100 ? "Good" : "Needs Optimization"
-        };
+            _cache.Remove("inventory_list");
+            var stopwatch = Stopwatch.StartNew();
+            var items = await _context.InventoryItems.AsNoTracking().ToListAsync();
+            stopwatch.Stop();
+            
+            return new
+            {
+                Test = "Cold Database Inventory Query",
+                TimeMs = stopwatch.ElapsedMilliseconds,
+                ItemCount = items.Count,
+                Status = stopwatch.ElapsedMilliseconds < 50 ? "Excellent" : 
+                         stopwatch.ElapsedMilliseconds < 100 ? "Good" : "Needs Optimization"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new
+            {
+                Test = "Cold Database Inventory Query",
+                Status = "Failed",
+                Error = ex.Message
+            };
+        }
     }
 
     private async Task<object> TestCachedInventoryQuery()
     {
-        // First call to populate cache
-        await _context.InventoryItems.AsNoTracking().ToListAsync();
-        _cache.Set("inventory_list", await _context.InventoryItems.AsNoTracking().ToListAsync(), TimeSpan.FromMinutes(1));
-        
-        // Test cached retrieval
-        var stopwatch = Stopwatch.StartNew();
-        _cache.TryGetValue("inventory_list", out var cachedItems);
-        stopwatch.Stop();
-        
-        return new
+        try
         {
-            Test = "Cached Inventory Query",
-            TimeMs = stopwatch.ElapsedMilliseconds,
-            CacheHit = cachedItems != null,
-            Status = stopwatch.ElapsedMilliseconds < 5 ? "Excellent" : "Needs Optimization"
-        };
+            // First call to populate cache
+            var items = await _context.InventoryItems.AsNoTracking().ToListAsync();
+            _cache.Set("inventory_list", items, TimeSpan.FromMinutes(1));
+            
+            // Test cached retrieval
+            var stopwatch = Stopwatch.StartNew();
+            var cachedItems = _cache.TryGetValue("inventory_list", out var cached);
+            stopwatch.Stop();
+            
+            return new
+            {
+                Test = "Cached Inventory Query",
+                TimeMs = stopwatch.ElapsedMilliseconds,
+                CacheHit = cachedItems,
+                Status = stopwatch.ElapsedMilliseconds < 5 ? "Excellent" : "Needs Optimization"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new
+            {
+                Test = "Cached Inventory Query",
+                Status = "Failed",
+                Error = ex.Message
+            };
+        }
     }
 
     private async Task<object> TestComplexOrderQuery()
     {
-        var stopwatch = Stopwatch.StartNew();
-        var orders = await _context.Orders
-            .Include(o => o.Items)
-                .ThenInclude(oi => oi.InventoryItem)
-            .AsNoTracking()
-            .Where(o => o.OrderDate >= DateTime.Now.AddDays(-30))
-            .OrderByDescending(o => o.OrderDate)
-            .ToListAsync();
-        stopwatch.Stop();
-        
-        return new
+        try
         {
-            Test = "Complex Order Query with Joins",
-            TimeMs = stopwatch.ElapsedMilliseconds,
-            OrderCount = orders.Count,
-            TotalItems = orders.SelectMany(o => o.Items).Count(),
-            Status = stopwatch.ElapsedMilliseconds < 100 ? "Good" : "Needs Optimization"
-        };
+            var stopwatch = Stopwatch.StartNew();
+            var orders = await _context.Orders
+                .Include(o => o.Items)
+                    .ThenInclude(oi => oi.InventoryItem)
+                .AsNoTracking()
+                .Where(o => o.OrderDate >= DateTime.Now.AddDays(-30))
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
+            stopwatch.Stop();
+            
+            return new
+            {
+                Test = "Complex Order Query with Joins",
+                TimeMs = stopwatch.ElapsedMilliseconds,
+                OrderCount = orders.Count,
+                TotalItems = orders.SelectMany(o => o.Items).Count(),
+                Status = stopwatch.ElapsedMilliseconds < 100 ? "Good" : "Needs Optimization"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new
+            {
+                Test = "Complex Order Query with Joins",
+                Status = "Failed",
+                Error = ex.Message
+            };
+        }
     }
 
     private async Task<object> TestDatabaseWritePerformance()
     {
-        var stopwatch = Stopwatch.StartNew();
-        
-        var testItem = new InventoryItem
+        try
         {
-            Name = $"Test Item {Guid.NewGuid()}",
-            Quantity = 1,
-            Location = "Test Location"
-        };
-        
-        _context.InventoryItems.Add(testItem);
-        await _context.SaveChangesAsync();
-        
-        // Clean up
-        _context.InventoryItems.Remove(testItem);
-        await _context.SaveChangesAsync();
-        
-        stopwatch.Stop();
-        
-        return new
+            var stopwatch = Stopwatch.StartNew();
+            
+            var testItem = new InventoryItem
+            {
+                Name = $"Test Item {Guid.NewGuid()}",
+                Quantity = 1,
+                Location = "Test Location"
+            };
+            
+            _context.InventoryItems.Add(testItem);
+            await _context.SaveChangesAsync();
+            
+            // Clean up
+            _context.InventoryItems.Remove(testItem);
+            await _context.SaveChangesAsync();
+            
+            stopwatch.Stop();
+            
+            return new
+            {
+                Test = "Database Write Performance",
+                TimeMs = stopwatch.ElapsedMilliseconds,
+                Status = stopwatch.ElapsedMilliseconds < 50 ? "Excellent" : 
+                         stopwatch.ElapsedMilliseconds < 100 ? "Good" : "Needs Optimization"
+            };
+        }
+        catch (Exception ex)
         {
-            Test = "Database Write Performance",
-            TimeMs = stopwatch.ElapsedMilliseconds,
-            Status = stopwatch.ElapsedMilliseconds < 50 ? "Excellent" : 
-                     stopwatch.ElapsedMilliseconds < 100 ? "Good" : "Needs Optimization"
-        };
+            return new
+            {
+                Test = "Database Write Performance",
+                Status = "Failed",
+                Error = ex.Message
+            };
+        }
     }
 
     private async Task<object> TestCacheVsDatabaseComparison()
     {
-        // Database query
-        var dbStopwatch = Stopwatch.StartNew();
-        var dbItems = await _context.InventoryItems.AsNoTracking().Take(5).ToListAsync();
-        dbStopwatch.Stop();
-        
-        // Cache the results
-        _cache.Set("comparison_test", dbItems, TimeSpan.FromMinutes(1));
-        
-        // Cache query
-        var cacheStopwatch = Stopwatch.StartNew();
-        _cache.TryGetValue("comparison_test", out var cachedItems);
-        cacheStopwatch.Stop();
-        
-        var performanceImprovement = dbStopwatch.ElapsedMilliseconds > 0 
-            ? ((double)(dbStopwatch.ElapsedMilliseconds - cacheStopwatch.ElapsedMilliseconds) / dbStopwatch.ElapsedMilliseconds) * 100
-            : 0;
-        
-        return new
+        try
         {
-            Test = "Cache vs Database Comparison",
-            DatabaseTimeMs = dbStopwatch.ElapsedMilliseconds,
-            CacheTimeMs = cacheStopwatch.ElapsedMilliseconds,
-            PerformanceImprovementPercent = Math.Round(performanceImprovement, 2),
-            Recommendation = performanceImprovement > 50 ? "Cache is highly effective" : "Consider optimizing cache strategy"
-        };
+            // Database query
+            var dbStopwatch = Stopwatch.StartNew();
+            var dbItems = await _context.InventoryItems.AsNoTracking().Take(5).ToListAsync();
+            dbStopwatch.Stop();
+            
+            // Cache the results
+            _cache.Set("comparison_test", dbItems, TimeSpan.FromMinutes(1));
+            
+            // Cache query
+            var cacheStopwatch = Stopwatch.StartNew();
+            _cache.TryGetValue("comparison_test", out var cachedItems);
+            cacheStopwatch.Stop();
+            
+            var performanceImprovement = dbStopwatch.ElapsedMilliseconds > 0 
+                ? ((double)(dbStopwatch.ElapsedMilliseconds - cacheStopwatch.ElapsedMilliseconds) / dbStopwatch.ElapsedMilliseconds) * 100
+                : 0;
+            
+            return new
+            {
+                Test = "Cache vs Database Comparison",
+                DatabaseTimeMs = dbStopwatch.ElapsedMilliseconds,
+                CacheTimeMs = cacheStopwatch.ElapsedMilliseconds,
+                PerformanceImprovementPercent = Math.Round(performanceImprovement, 2),
+                Recommendation = performanceImprovement > 50 ? "Cache is highly effective" : "Consider optimizing cache strategy"
+            };
+        }
+        catch (Exception ex)
+        {
+            return new
+            {
+                Test = "Cache vs Database Comparison",
+                Status = "Failed",
+                Error = ex.Message
+            };
+        }
     }
 
     private List<string> GeneratePerformanceRecommendations(List<object> testResults)

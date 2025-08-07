@@ -1,6 +1,6 @@
 @LogiTrack_HostAddress = http://localhost:5151
 @LogiTrack_SecureHostAddress = https://localhost:7129
-@Bearer_Token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlYWNmMTY0NS01YWM0LTQzOTYtYTQ1NS1kMzliMDc4NGUxNTQiLCJlbWFpbCI6ImFkbWluQGxvZ2l0cmFjay5jb20iLCJqdGkiOiI3MmU4Nzc2MS05NTUxLTQxOWMtOTljZC05NjQ2NThlMDk1NmIiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6ImVhY2YxNjQ1LTVhYzQtNDM5Ni1hNDU1LWQzOWIwNzg0ZTE1NCIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL25hbWUiOiJhZG1pbkBsb2dpdHJhY2suY29tIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiTWFuYWdlciIsImV4cCI6MTc1NDY1OTE1NCwiaXNzIjoiTG9naVRyYWNrIiwiYXVkIjoiTG9naVRyYWNrIn0.u69wk2rJ65ng-PpcE0nxPNJ9f5dksZ82Lm-oslVTluM
+@Bearer_Token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZDVlNDQ2NC0wMGE3LTQ3Y2UtYmQ5Yi01MzI0YmQ0Yjc4NTkiLCJlbWFpbCI6ImFkbWluQGxvZ2l0cmFjay5jb20iLCJqdGkiOiI4Yzg3ZDM5OC02YTQzLTQwMDgtYjNiYy0xMGQ2ZGI2ZGY3Y2YiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6ImNkNWU0NDY0LTAwYTctNDdjZS1iZDliLTUzMjRiZDRiNzg1OSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL25hbWUiOiJhZG1pbkBsb2dpdHJhY2suY29tIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiTWFuYWdlciIsImV4cCI6MTc1NDY2NTgwNSwiaXNzIjoiTG9naVRyYWNrIiwiYXVkIjoiTG9naVRyYWNrIn0.njTeFSNBgbYMsxgRuRMVSRBntgVIEAADCURR9TJn5ns
 
 GET {{LogiTrack_HostAddress}}/weatherforecast/
 Accept: application/json
@@ -162,4 +162,82 @@ Authorization: Bearer {{Bearer_Token}}
 ###
 # Clear cache (Manager only)
 GET {{LogiTrack_SecureHostAddress}}/api/performancetest/clear-cache
+Authorization: Bearer {{Bearer_Token}}
+
+### Complete System Workflow Test
+
+###
+# 1. Health Check (No Auth Required)
+GET {{LogiTrack_SecureHostAddress}}/api/systemhealth/health
+
+###
+# 2. User Login
+POST {{LogiTrack_SecureHostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@logitrack.com",
+  "password": "Admin123!"
+}
+
+###
+# 3. System Status Check (Auth Required)
+GET {{LogiTrack_SecureHostAddress}}/api/systemhealth/status
+Authorization: Bearer {{Bearer_Token}}
+
+###
+# 4. Performance Test Suite
+GET {{LogiTrack_SecureHostAddress}}/api/performancetest/comprehensive-test
+Authorization: Bearer {{Bearer_Token}}
+
+###
+# 5. Database Integrity Check (Manager Only)
+GET {{LogiTrack_SecureHostAddress}}/api/systemhealth/database-integrity
+Authorization: Bearer {{Bearer_Token}}
+
+###
+# 6. Simple Stress Test (Manager Only) - SAFE VERSION
+GET {{LogiTrack_SecureHostAddress}}/api/performancetest/simple-stress-test
+Authorization: Bearer {{Bearer_Token}}
+
+###
+# 7. Advanced Stress Test (Manager Only) - Use with caution
+GET {{LogiTrack_SecureHostAddress}}/api/performancetest/stress-test
+Authorization: Bearer {{Bearer_Token}}
+
+###
+# 8. Test Inventory Caching
+GET {{LogiTrack_SecureHostAddress}}/api/inventory
+Authorization: Bearer {{Bearer_Token}}
+
+###
+# 9. Test Order Operations
+GET {{LogiTrack_SecureHostAddress}}/api/orders
+Authorization: Bearer {{Bearer_Token}}
+
+###
+# 10. Create New Order (Employee/Manager)
+POST {{LogiTrack_SecureHostAddress}}/api/orders
+Authorization: Bearer {{Bearer_Token}}
+Content-Type: application/json
+
+{
+  "customerName": "System Test Customer",
+  "orderDate": "2025-08-07T14:00:00Z",
+  "items": [
+    {
+      "inventoryItemId": 1,
+      "quantityOrdered": 2
+    }
+  ]
+}
+
+###
+# 11. Clear Expired Sessions (Manager Only)
+POST {{LogiTrack_SecureHostAddress}}/api/systemhealth/clear-expired-sessions
+Authorization: Bearer {{Bearer_Token}}
+
+###
+# 12. Final Cache Clear
+GET {{LogiTrack_SecureHostAddress}}/api/performancetest/clear-all-cache
 Authorization: Bearer {{Bearer_Token}}

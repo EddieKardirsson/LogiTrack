@@ -483,6 +483,10 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
+LogiTrack/logitrack.db
 LogiTrack/logitrack.db-shm
-
 LogiTrack/logitrack.db-wal
+
+LogiTrack/Data/logitrack.db
+LogiTrack/Data/logitrack.db-shm
+LogiTrack/Data/logitrack.db-wal
