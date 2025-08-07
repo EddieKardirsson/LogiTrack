@@ -18,6 +18,9 @@ public class Program
         // Add services to the container.
         builder.Services.AddDbContext<LogiTrackContext>();
         
+        // Add Memory Cache
+        builder.Services.AddMemoryCache();
+        
         // Add Identity services
         builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         {
