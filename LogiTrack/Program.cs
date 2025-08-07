@@ -72,16 +72,22 @@ public class Program
             .AddEndpointsApiExplorer()
             .AddSwaggerGen(c =>
             {
-                // Add JWT support to Swagger
+                c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo 
+                { 
+                    Title = "LogiTrack API", 
+                    Version = "v1",
+                    Description = "A logistics tracking API with JWT authentication"
+                });
+
+                // Add JWT Bearer authentication to Swagger
                 c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
                 {
-                    Description = "JWT Authorization header using the Bearer scheme",
-                    Name = "Authorization",
-                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-                    Scheme = "Bearer"
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+                    Scheme = "Bearer",
+                    BearerFormat = "JWT",
+                    Description = "Enter your JWT token without the 'Bearer ' prefix"
                 });
-                
+        
                 c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
                 {
                     {
@@ -93,10 +99,11 @@ public class Program
                                 Id = "Bearer"
                             }
                         },
-                        new string[] {}
+                        Array.Empty<string>()
                     }
                 });
             });
+
         
         // Add Exception Handling Middleware
         builder.Services.AddExceptionHandler(options =>
