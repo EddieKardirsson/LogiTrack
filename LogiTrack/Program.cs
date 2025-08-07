@@ -320,25 +320,64 @@ public class Program
     {
         using var scope = app.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<LogiTrackContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         
-        // Delete in the correct order to respect foreign key constraints
-        // 1. First delete OrderItems (they reference InventoryItems)
+        Console.WriteLine("Starting database cleanup...");
+        
+        // Delete business data first (in correct order for foreign key constraints)
+        Console.WriteLine("Clearing OrderItems...");
         context.OrderItems.RemoveRange(context.OrderItems);
         
-        // 2. Then delete Orders (they contain OrderItems)
+        Console.WriteLine("Clearing Orders...");
         context.Orders.RemoveRange(context.Orders);
         
-        // 3. Finally delete InventoryItems (they are referenced by OrderItems)
+        Console.WriteLine("Clearing InventoryItems...");
         context.InventoryItems.RemoveRange(context.InventoryItems);
         
         context.SaveChanges();
         
-        // Reset the index counters to start from 1 again
+        // Clear Identity data
+        Console.WriteLine("Clearing Identity data...");
+        
+        // Delete user roles relationships first
+        context.Database.ExecuteSqlRaw("DELETE FROM AspNetUserRoles");
+        
+        // Delete user claims, logins, and tokens
+        context.Database.ExecuteSqlRaw("DELETE FROM AspNetUserClaims");
+        context.Database.ExecuteSqlRaw("DELETE FROM AspNetUserLogins");
+        context.Database.ExecuteSqlRaw("DELETE FROM AspNetUserTokens");
+        
+        // Delete role claims
+        context.Database.ExecuteSqlRaw("DELETE FROM AspNetRoleClaims");
+        
+        // Delete users
+        context.Database.ExecuteSqlRaw("DELETE FROM AspNetUsers");
+        
+        // Delete roles
+        context.Database.ExecuteSqlRaw("DELETE FROM AspNetRoles");
+        
+        // Reset the identity/sequence counters for all tables
+        Console.WriteLine("Resetting sequence counters...");
         context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='InventoryItems'");
         context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='Orders'");
         context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='OrderItems'");
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='AspNetUsers'");
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='AspNetRoles'");
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='AspNetUserClaims'");
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='AspNetUserLogins'");
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='AspNetUserTokens'");
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='AspNetUserRoles'");
+        context.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='AspNetRoleClaims'");
         
         Console.WriteLine("Database cleared successfully!");
+        
+        // Optionally re-seed the roles and default users after clearing
+        Console.WriteLine("Re-seeding roles and default users...");
+        SeedRolesAsync(roleManager).Wait();
+        SeedUsersAsync(userManager).Wait();
+        
+        Console.WriteLine("Database reset complete!");
     }
 
     // This method prints order summaries in batches to avoid loading too many records into memory at once. Great for large datasets.
